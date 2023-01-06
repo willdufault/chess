@@ -14,12 +14,12 @@ before game:
 '''
 
 def main() -> None:
-	model = models.Model(3)
+	model = models.Model(2)
 	team = True
 	model.board.generateControlMatrix()
 	model.board.generatePositionMatrix()
 	model.board.generateLegalMoves(team)
-	print(f"eval: {model.engine.simpleEvaluate(model.board)}")
+	print(f"\neval: {model.engine.simpleEvaluate(model.board)}")
 	print(); model.board.printBoard(); print()
 
 	model.bot.bot_move(model.board, team)

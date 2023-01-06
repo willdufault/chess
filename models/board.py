@@ -102,6 +102,46 @@ class Board:
 		# update move count
 		self.cnt += 1
 
+	def botMovePiece(self, move: str) -> None:
+		'''
+		same as move piece but auto-promotion to queen
+		'''
+		if move not in self.legal_moves:
+			print("bot move,", move, "not in legal moves")
+			return
+		r, c, r1, c1 = move  # r,c = cur pos, r1,c1 = new pos
+		# short castle
+		if move in ((0, 4, 0, 6), (7, 4, 7, 6)):
+			# set both king and rook moved to true
+			self.squares[r][4].moved, self.squares[r][7].moved = True, True  # could do this with a = b = True
+			# move king + rook
+			self.squares[r][4], self.squares[r][6] = None, self.squares[r][4]
+			self.squares[r][7], self.squares[r][5] = None, self.squares[r][7]
+		# long castle
+		elif move in ((0, 4, 0, 2), (7, 4, 7, 2)):
+			# set both king and rook moved to true
+			self.squares[r][4].moved, self.squares[r][0].moved = True, True  # could do this with a = b = True
+			# move king + rook
+			self.squares[r][4], self.squares[r][2] = None, self.squares[r][4]
+			self.squares[r][0], self.squares[r][3] = None, self.squares[r][0]
+		# other moves
+		else:
+			# if moving pawn, rook, or king, set moved to true
+			if (cur := self.squares[r][c]).__class__.__name__ in ("Pawn", "Rook", "King"):
+				cur.moved = True
+			# move piece
+			self.squares[r1][c1], self.squares[r][c] = self.squares[r][c], None
+			# if pawn and on last rank, promote
+			if ((cur := self.squares[r1][c1]).__class__.__name__ == "Pawn") and (r1 in (0, 7)):
+				self.squares[r1][c1] = Queen(cur.team)
+		# if moving king, update king pos
+		if (cur := self.squares[r1][c1]).__class__.__name__ == "King":
+			if cur.team:
+				self.white_king_pos = (r1, c1)
+			else:
+				self.black_king_pos = (r1, c1)
+		# update move count
+		self.cnt += 1
 
 	def checkCheck(self, team: bool) -> bool:
 		
