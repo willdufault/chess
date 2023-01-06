@@ -6,6 +6,7 @@ class Model:
 		self.board = Board()
 		self.black_king_pos = (0, 4)
 		self.white_king_pos = (7, 4)
+		self.cnt = 0  # move count, 100 per side => auto stalemate
 
 	def validMove(self, move: str, team: bool) -> bool:
 		return (len(move) == 4) and (all([(c.isnumeric() and (int(c) in range(8))) for c in move])) \
@@ -64,6 +65,8 @@ class Model:
 				self.white_king_pos = (r1, c1)
 			else:
 				self.black_king_pos = (r1, c1)
+		# update move count
+		self.cnt += 1
 
 	def checkCheck(self, team: bool) -> bool:
 		
@@ -74,111 +77,12 @@ class Model:
 			else controls(self.black_king_pos[0], self.black_king_pos[1], True)			
 	
 	def checkMate(self, team: bool) -> bool:
-		'''
-		precondition: king is under check
-
-		"escape" mate three criteria:
-		1) move out of the way
-			- there is at least one non-occupied square around the king that is not under opp control
-			* if king in double-check (check + discovered check), this is the only option
-		2) capture attacking piece
-			- cur team can capture piece checking king
-			* if king can capture, that piece must not be defended
-		3) block check
-			- cur team has at least one piece that can block opp attack (except knight)
-		'''
-
-		def controls(r: int, c: int, team: bool) -> bool:
-			# non-king piece controls this square
-			return any([((p[2] == team) and (tuple(p[:2]) != (self.white_king_pos if team else self.black_king_pos))) for p in self.control_mtx[r][c]])
-		
-		r, c = self.white_king_pos if team else self.black_king_pos
-		# case 1: move out of the way
-		print("case 1")
-		if any([((r, c) == tuple(m[:2])) for m in self.legal_moves]):
-			return False
-		# edge case 1: double check
-		print("edge 1")
-		aps = [p for p in self.control_mtx[r][c] if (p[2] != team)]  # attacking pieces
-		if len(aps) > 1:
-			return True
-		# case 2: capture attacking piece
-		print("case 2")
-		ar, ac = aps[0][:2]  # attacking piece row, col
-		# cur team can capture attacking piece (not king, case 1 covers this)
-		if any([((p[2] == team) and (p[3] != "King")) for p in self.control_mtx[ar][ac]]):
-			return False
-		# case 3: block check
-		print("case 3")
-		match aps[0][3]:
-			case "Pawn":
-				# can't block pawn
-				pass
-			case "Knight":
-				# can't block knight
-				pass
-			case "Bishop":
-				r1, c1 = r, c
-				dr, dc = 1 if (ar > r1) else -1, 1 if (ac > c1) else -1
-				r1 += dr
-				c1 += dc
-				while (r1 != ar) and (c1 != ac):
-					if controls(r1, c1, team):
-						return False
-					r1 += dr
-					c1 += dc
-			case "Rook":
-				# col
-				if r == ar:
-					dc = 1 if (ac > c) else -1
-					c1 = c + dc
-					while c1 != ac:
-						if controls(r, c1, team):
-							return False
-						c1 += dc
-				# row
-				else:
-					dr = 1 if (ar > r) else -1
-					r1 = r + dr
-					while r1 != ar:
-						if controls(r1, c, team):
-							return False
-						r1 += dr
-			case "Queen":
-				# col
-				if r == ar:
-					dc = 1 if (ac > c) else -1
-					c1 = c + dc
-					while c1 != ac:
-						if controls(r, c1, team):
-							return False
-						c1 += dc
-				# row
-				elif c == ac:
-					dr = 1 if (ar > r) else -1
-					r1 = r + dr
-					while r1 != ar:
-						if controls(r1, c, team):
-							return False
-						r1 += dr
-				# diagonal
-				else:
-					r1, c1 = r, c
-					dr, dc = 1 if (ar > r1) else -1, 1 if (ac > c1) else -1
-					r1 += dr
-					c1 += dc
-					while (r1 != ar) and (c1 != ac):
-						if controls(r1, c1, team):
-							return False
-						r1 += dr
-						c1 += dc
-			case _:
-				pass
-		# failed all escape conditions, it's mate
-		return True
+		# no legal moves and in check
+		return (not self.legal_moves) and self.checkCheck(team)
 
 	def checkStale(self, team: bool) -> bool:
-		return not self.legal_moves
+		# 100 moves per side or no legal moves + no check
+		return (self.cnt == 200) or (not (self.legal_moves or self.checkCheck(team)))
 
 	def generateControlMatrix(self) -> None:
 
@@ -273,46 +177,80 @@ class Model:
 			for c in range(8):
 				cur = self.board.squares[r][c]
 				mtx[r][c] = cur.team if cur else None
-		self.position_mtx = mtx
+		self.pos_mtx = mtx
 
 	def generateLegalMoves(self, team: bool) -> None:
-
 		def inBounds(x: int) -> bool:
 			return x in range(8)
-
+		
+		def inCheckAfter(r: int, c: int, r1: int, c1: int) -> bool:
+			old, old1 = self.board.squares[r][c], self.board.squares[r1][c1]
+			pt = old.__class__.__name__  # piece type
+			old_control_mtx = self.control_mtx
+			# try move
+			self.board.squares[r][c], self.board.squares[r1][c1] = None, self.board.squares[r][c]
+			# king, update king pos
+			if pt == "King":
+				if old.team:
+					self.white_king_pos = (r1, c1)
+				else:
+					self.black_king_pos = (r1, c1)
+			self.generateControlMatrix()
+			check = self.checkCheck(team)  # still under check after move?
+			# undo move
+			self.board.squares[r][c], self.board.squares[r1][c1] = old, old1
+			self.control_mtx = old_control_mtx
+			# king, update king pos
+			if pt == "King":
+				if old.team:
+					self.white_king_pos = (r, c)
+				else:
+					self.black_king_pos = (r, c)
+			return check
+			
 		def addMove(r: int, c: int, r1: int, c1: int) -> None:
 			legal.append((r, c, r1, c1))
 
 		legal = []
+
 		for r in range(8):
 			for c in range(8):
-				if cur := self.board.squares[r][c]:
-					team = cur.team
+				# piece here and it's on this team
+				if (cur := self.board.squares[r][c]) and (cur.team == team):
 					match cur.__class__.__name__:
 						case "Pawn":
-							dr = -1 if team else 1
-							if inBounds(sr := r + dr):
-								if self.position_mtx[sr][c] == None:
+							dr = -1 if team else 1  # delta row
+							if inBounds(sr := r + dr): 
+								# move 1
+								if (self.pos_mtx[sr][c] == None) and (not  inCheckAfter(r, c, sr, c)):
 									addMove(r, c, sr, c)
-								if inBounds(sc := c + 1) and (self.position_mtx[sr][sc] not in (None, team)):
+								# capture right
+								if inBounds(sc := c + 1) and (self.pos_mtx[sr][sc] == (not team)) \
+									and (not inCheckAfter(r, c, sr, sc)):
 									addMove(r, c, sr, sc)
-								if inBounds(sc := c - 1) and (self.position_mtx[sr][sc] not in (None, team)):
+								# capture left
+								if inBounds(sc := c - 1) and (self.pos_mtx[sr][sc] == (not team)) \
+									and (not inCheckAfter(r, c, sr, sc)):
 									addMove(r, c, sr, sc)
-							if inBounds(dr2 := sr + dr) and (not cur.moved) and (self.position_mtx[sr][c] == self.position_mtx[dr2][c] == None):
+							# move 2 (first move only)
+							if inBounds(dr2 := sr + dr) and (not cur.moved) and (self.pos_mtx[sr][c] == self.pos_mtx[dr2][c] == None) \
+								and not inCheckAfter(r, c, dr2, c):
 								addMove(r, c, dr2, c)
 						case "Knight":
 							moves = ((2, 1), (2, -1), (-2, 1), (-2, -1), \
 									 (1, 2), (1, -2), (-1, 2), (-1, -2))
 							for m in moves:
-								if inBounds(sr := r + m[0]) and inBounds(sc := c + m[1]) and (self.position_mtx[sr][sc] != team):
-									addMove(r, c, sr, sc)
+								if inBounds(sr := r + m[0]) and inBounds(sc := c + m[1]) and (self.pos_mtx[sr][sc] != team) \
+									and (not inCheckAfter(r, c, sr, sc)):
+										addMove(r, c, sr, sc)
 						case "Bishop":
 							dirs = ((1, 1), (1, -1), (-1, 1), (-1, -1))
 							for d in dirs:
 								r1, c1 = r + d[0], c + d[1]
-								while inBounds(r1) and inBounds(c1) and (self.position_mtx[r1][c1] != team):
-									addMove(r, c, r1, c1)
-									if self.position_mtx[r1][c1] != None:
+								while inBounds(r1) and inBounds(c1) and (self.pos_mtx[r1][c1] != team):
+									if not inCheckAfter(r, c, r1, c1):
+										addMove(r, c, r1, c1)
+									if self.pos_mtx[r1][c1] != None:
 										break
 									r1 += d[0]
 									c1 += d[1]
@@ -320,14 +258,16 @@ class Model:
 							deltas = (1, -1)
 							for d in deltas:
 								r1, c1 = r + d, c + d
-								while inBounds(r1) and (self.position_mtx[r1][c] != team):
-									addMove(r, c, r1, c)
-									if self.position_mtx[r1][c] != None:
+								while inBounds(r1) and (self.pos_mtx[r1][c] != team):
+									if not inCheckAfter(r, c, r1, c):
+										addMove(r, c, r1, c)
+									if self.pos_mtx[r1][c] != None:
 										break
 									r1 += d
-								while inBounds(c1) and (self.position_mtx[r][c1] != team):
-									addMove(r, c, r, c1)
-									if self.position_mtx[r][c1] != None:
+								while inBounds(c1) and (self.pos_mtx[r][c1] != team):
+									if not inCheckAfter(r, c, r, c1):
+										addMove(r, c, r, c1)
+									if self.pos_mtx[r][c1] != None:
 										break
 									c1 += d
 						case "Queen":
@@ -335,9 +275,10 @@ class Model:
 							dirs = ((1, 1), (1, -1), (-1, 1), (-1, -1))
 							for d in dirs:
 								r1, c1 = r + d[0], c + d[1]
-								while inBounds(r1) and inBounds(c1) and (self.position_mtx[r1][c1] != team):
-									addMove(r, c, r1, c1)
-									if self.position_mtx[r1][c1] != None:
+								while inBounds(r1) and inBounds(c1) and (self.pos_mtx[r1][c1] != team):
+									if not inCheckAfter(r, c, r1, c1):
+										addMove(r, c, r1, c1)
+									if self.pos_mtx[r1][c1] != None:
 										break
 									r1 += d[0]
 									c1 += d[1]
@@ -345,14 +286,16 @@ class Model:
 							deltas = (1, -1)
 							for d in deltas:
 								r1, c1 = r + d, c + d
-								while inBounds(r1) and (self.position_mtx[r1][c] != team):
-									addMove(r, c, r1, c)
-									if self.position_mtx[r1][c] != None:
+								while inBounds(r1) and (self.pos_mtx[r1][c] != team):
+									if not inCheckAfter(r, c, r1, c):
+										addMove(r, c, r1, c)
+									if self.pos_mtx[r1][c] != None:
 										break
 									r1 += d
-								while inBounds(c1) and (self.position_mtx[r][c1] != team):
-									addMove(r, c, r, c1)
-									if self.position_mtx[r][c1] != None:
+								while inBounds(c1) and (self.pos_mtx[r][c1] != team):
+									if not inCheckAfter(r, c, r, c1):
+										addMove(r, c, r, c1)
+									if self.pos_mtx[r][c1] != None:
 										break
 									c1 += d
 						case "King":
@@ -360,19 +303,21 @@ class Model:
 									 (-1, -1), (-1, 0), (-1, 1), (0, 1))
 							for m in moves:
 								if inBounds(sr := r + m[0]) and inBounds(sc := c + m[1]) \
-									and (self.position_mtx[sr][sc] != team) \
-									and (not any([(p[2] != team) for p in self.control_mtx[sr][sc]])):
-									addMove(r, c, sr, sc)
+									and (self.pos_mtx[sr][sc] != team) and (not any([(p[2] != team) for p in self.control_mtx[sr][sc]])) \
+									and (not inCheckAfter(r, c, sr, sc)):
+										addMove(r, c, sr, sc)
 							# castle
+							# todo: can't castle if king, rook, or spaces in between under check
 							if (not cur.moved):
 								# short
 								if ((rook := self.board.squares[r][7]) != None) and (rook.__class__.__name__ == "Rook") and (not rook.moved) \
-									and (self.board.squares[r][5] == self.board.squares[r][6] == None):
-									addMove(r, 4, r, 6)
+									and (self.board.squares[r][5] == self.board.squares[r][6] == None) and (not inCheckAfter(r, 4, r, 6)):
+										addMove(r, 4, r, 6)
 								# long
 								if ((rook := self.board.squares[r][0]) != None) and (rook.__class__.__name__ == "Rook") and (not rook.moved) \
-									and (self.board.squares[r][1] == self.board.squares[r][2] == self.board.squares[r][3] == None):
-									addMove(r, 4, r, 2)
+									and (self.board.squares[r][1] == self.board.squares[r][2] == self.board.squares[r][3] == None) \
+										and (not inCheckAfter(r, 4, r, 2)):
+										addMove(r, 4, r, 2)
 						case _:
 							pass
 		self.legal_moves = legal
@@ -416,5 +361,5 @@ class Model:
 		for r in range(8):
 			print(f"ROW {r} =>    ", end = "")
 			for c in range(8):
-				print(self.position_mtx[r][c], end = "  ")
+				print(self.pos_mtx[r][c], end = "  ")
 			print()
