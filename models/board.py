@@ -75,7 +75,7 @@ class Board:
 		# other moves
 		else:
 			# if moving pawn, rook, or king, set moved to true
-			if (cur := self.squares[r][c]).__class__.__name__ in ("Pawn", "Rook", "King"):
+			if hasattr((cur := self.squares[r][c]), "moved"):
 				cur.moved = True
 			# move piece
 			self.squares[r1][c1], self.squares[r][c] = self.squares[r][c], None
@@ -107,7 +107,7 @@ class Board:
 		same as move piece but auto-promotion to queen
 		'''
 		if move not in self.legal_moves:
-			print("bot move,", move, "not in legal moves")
+			print(move, " not in legal moves")		
 			return
 		r, c, r1, c1 = move  # r,c = cur pos, r1,c1 = new pos
 		# short castle
@@ -127,7 +127,7 @@ class Board:
 		# other moves
 		else:
 			# if moving pawn, rook, or king, set moved to true
-			if (cur := self.squares[r][c]).__class__.__name__ in ("Pawn", "Rook", "King"):
+			if hasattr((cur := self.squares[r][c]), "moved"):
 				cur.moved = True
 			# move piece
 			self.squares[r1][c1], self.squares[r][c] = self.squares[r][c], None
@@ -142,6 +142,18 @@ class Board:
 				self.black_king_pos = (r1, c1)
 		# update move count
 		self.cnt += 1
+
+	def undoMove(self, move: tuple[int, object, bool]) -> None:
+		'''
+		undo given move
+		'''
+		r, c, r1, c1, old, old1, moved = move
+		# undo move
+		self.squares[r][c], self.squares[r1][c1] = old, old1
+		if hasattr(self.squares[r][c], "moved"):
+			self.squares[r][c].moved = moved
+		# erase last move
+		self.last_move = None
 
 	def checkCheck(self, team: bool) -> bool:
 		

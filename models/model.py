@@ -7,7 +7,4 @@ class Model:
 	def __init__(self, depth: int):
 		self.board = Board()
 		self.engine = Engine()
-		self.bot = Bot(depth)
-		
-	
-	
+		self.bot = Bot(depth, self.engine)
