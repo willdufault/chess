@@ -82,4 +82,6 @@ class Engine:
 	
 	def evaluate(self, board: object) -> int:
 		# todo: optimize/combine this cleanly so that it doesn't run through entire board on every eval
-		return 0.1 * self.positionEvaluate(board) + 3 * self.materialEvaluate(board)
+		pos_score = 0.1 * self.positionEvaluate(board)
+		mat_score = 50 * self.materialEvaluate(board)
+		return pos_score + mat_score

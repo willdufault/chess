@@ -8,3 +8,19 @@ class Model:
 		self.board = Board()
 		self.engine = Engine()
 		self.bot = Bot(depth, self.engine)
+		self.move_cnt = 0
+
+	def validMove(self, move: tuple[int]) -> bool:
+		'''
+		if move follows correct format: len 4, all ints, second half != first half
+		'''
+		return (len(move) == 4) and (move[:2] != move[2:])
+	
+	def legalMove(self, move: tuple[int]) -> bool:
+		'''
+		precondition: move is valid
+
+		if move is a legal move on the board
+		'''
+		r, c, rx, cx = move
+		return (r, c) in self.board.legal_moves[rx][cx]

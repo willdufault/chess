@@ -20,9 +20,10 @@ class Bot:
 		for i, m in enumerate(moves):
 			r, c, r1, c1 = m  # cur move
 			move_tup = (r, c, r1, c1, board.squares[r][c], board.squares[r1][c1], \
-				board.squares[r][c].moved if hasattr(board.squares[r][c], "moved") else None)  # tuple of directions for this move			board.botMovePiece(m)
+				board.squares[r][c].moved if hasattr(board.squares[r][c], "moved") else None)  # tuple of directions for this move
+			board.botMovePiece(m)
 			# add move score
-			scores.append((self.minimax_ab_memo(team, self.depth - 1, -math.inf, math.inf, board), i))
+			scores.append((self.minimax_ab_memo(team, self.depth, -math.inf, math.inf, board), i))
 			board.undoMove(move_tup)
 			# re-generate matrices
 			board.generateControlMatrix()
@@ -30,6 +31,7 @@ class Bot:
 			board.generateLegalMoves(team)
 		# random choice of this, fix syntax
 		choices = [s for s in scores if (s[0] == (max(scores, key = lambda s:s[0])[0] if team else min(scores, key = lambda s:s[0])[0]))]
+		print("scores:", scores, "\nchoices:", choices)
 		best_move = moves[(random.choice(choices)[1])]  # best_move
 		# make move
 		board.botMovePiece(best_move)
@@ -57,9 +59,8 @@ class Bot:
 			return 0
 		# checkmate
 		if board.checkMate(team):
-			#? add tuple (cur_depth, score) so M1 is picked over M3? or add higher score if depth is higher/earlier?
 			#* mate score arbitrary for now
-			return -20 if team else 20
+			return (-200  if team else 200) * depth
 		# reached desired depth
 		if not depth:
 			return self.engine.evaluate(board)
@@ -77,6 +78,7 @@ class Bot:
 			# already seen this
 			if key in self.memo:
 				scores.append(score := self.memo[key])
+				# print(":) memo")
 			# new board
 			else:
 				scores.append(score := self.minimax_ab_memo(not team, depth - 1, a, b, board))
