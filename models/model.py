@@ -14,7 +14,7 @@ class Model:
 		'''
 		if move follows correct format: len 4, all ints, second half != first half
 		'''
-		return (len(move) == 4) and (move[:2] != move[2:])
+		return (len(move) == 4) and all([(x < 9) for x in move]) and (move[:2] != move[2:])
 	
 	def legalMove(self, move: tuple[int]) -> bool:
 		'''
@@ -23,4 +23,4 @@ class Model:
 		if move is a legal move on the board
 		'''
 		r, c, rx, cx = move
-		return (r, c) in self.board.legal_moves[rx][cx]
+		return (rx, cx) in self.board.legal_moves[r][c]

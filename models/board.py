@@ -26,66 +26,61 @@ class Board:
 		# generate matrices
 		self.generateControlMatrix()
 		self.generatePositionMatrix()
-		self.generateLegalMoves(True)
 
 	def move(self, r: int, c: int, rx: int, cx: int) -> None:
 		'''
 		move piece @ r,c -> rx,cx
 		'''
 		move = (r, c, rx, cx)
-		piece = self.squares[r][c]
-		king = piece.__class__.__name__ == "King"  # p1 is king bool
+		p = self.squares[r][c]  # piece @ r,c
+		king = p.__class__.__name__ == "King"
 		# short castle
 		if king and (move in ((0, 4, 0, 6), (7, 4, 7, 6))):
-			# set both king and rook moved to true
-			piece.moved, self.squares[r][7].moved = True, True  # could do this with a = b = True
-			# move king + rook
-			self.squares[r][4], self.squares[r][6] = None, piece
+			p.moved = self.squares[r][7].moved = True
+			self.squares[r][4], self.squares[r][6] = None, p
 			self.squares[r][7], self.squares[r][5] = None, self.squares[r][7]
 		# long castle
 		elif king and (move in ((0, 4, 0, 2), (7, 4, 7, 2))):
-			# set both king and rook moved to true
-			piece.moved, self.squares[r][0].moved = True, True  # could do this with a = b = True
-			# move king + rook
-			self.squares[r][4], self.squares[r][2] = None, piece
+			p.moved = self.squares[r][0].moved = True
+			self.squares[r][4], self.squares[r][2] = None, p
 			self.squares[r][0], self.squares[r][3] = None, self.squares[r][0]
-		# other moves
+		# normal move
 		else:
-			self.squares[r][c], self.squares[rx][cx] = None, piece
-			if hasattr(piece, "moved"):
-				piece.moved = True
+			self.squares[r][c], self.squares[rx][cx] = None, p
+			if hasattr(p, "moved"):
+				p.moved = True
 		# update king pos
 		if king:
-			if piece.team:
+			if p.team:
 				self.white_king_pos = (rx, cx)
 			else:
 				self.black_king_pos = (rx, cx)
 	
-	def undoMove(self, r: int, c: int, rx: int, cx: int, p1: object, p2: object, p1_moved: bool) -> None:
+	def undo(self, r: int, c: int, rx: int, cx: int, p1: object, p2: object, p1_moved: bool) -> None:
 		'''
 		undo given move
-		'''		
+
+		set piece @ r,c to p1, set piece @ rx,cx to p2, revert p1.moved
+		'''
 		move = (r, c, rx, cx)
-		king = p1.__class__.__name__ == "King"  # p1 is king bool
+		king = p1.__class__.__name__ == "King"
 		# short castle
 		if king and (move in ((0, 4, 0, 6), (7, 4, 7, 6))):
 			self.squares[r][4], self.squares[r][7] = self.squares[r][6], self.squares[r][5]
 			self.squares[r][5] = self.squares[r][6] = None
-			p1.moved = False
-			self.squares[r][7].moved = False
+			self.squares[r][4].moved = self.squares[r][7].moved = False
 		# long castle
 		elif king and (move in ((0, 4, 0, 2), (7, 4, 7, 2))):
 			self.squares[r][4], self.squares[r][0] = self.squares[r][2], self.squares[r][3]
-			self.squares[r][1] = self.squares[r][2] = self.squares[r][3] = None
-			self.squares[r][4].moved = False
-			self.squares[r][0].moved = False
-		# other move
+			self.squares[r][3] = self.squares[r][2] = None
+			self.squares[r][4].moved = self.squares[r][0].moved = False
+		# normal move
 		else:
 			self.squares[r][c], self.squares[rx][cx] = p1, p2
 			if hasattr(p1, "moved"):
 				p1.moved = p1_moved
+		# revert king pos
 		if king:
-			# revert king pos
 			if p1.team:
 				self.white_king_pos = (r, c)
 			else:
@@ -103,15 +98,14 @@ class Board:
 				inp = input("promote pawn to ... (\"Knight\", \"Bishop\", \"Rook\", \"Queen\")\n").strip()
 			return inp
 		
+		p1, p2 = self.squares[r][c], self.squares[rx][cx]
 		# update board state
-		self.updateControlMatrix(r, c, rx, cx)
-		self.updatePositionMatrix(r, c, rx, cx)
 		self.move(r, c, rx, cx)
+		self.updateControlMatrix(r, c, rx, cx, p1, p2)
+		self.generatePositionMatrix()
 		# promote
 		if ((cur := self.squares[rx][cx]).__class__.__name__ == "Pawn") and (rx in (0, 7)):
 			match promote():
-				case "Pawn":
-					pass
 				case "Knight":
 					self.squares[rx][cx] = Knight(cur.team)
 				case "Bishop":
@@ -121,15 +115,20 @@ class Board:
 					self.squares.moved = True
 				case "Queen":
 					self.squares[rx][cx] = Queen(cur.team)
+				case _:
+					pass
+			self.generateControlMatrix()
 
 	def botMove(self, r: int, c: int, rx: int, cx: int) -> None:
+		p1, p2 = self.squares[r][c], self.squares[rx][cx]
 		# update board state
-		self.updateControlMatrix(r, c, rx, cx)
-		self.updatePositionMatrix(r, c, rx, cx)
 		self.move(r, c, rx, cx)
+		self.updateControlMatrix(r, c, rx, cx, p1, p2)
+		self.generatePositionMatrix()
 		# auto promote to queen
 		if ((cur := self.squares[rx][cx]).__class__.__name__ == "Pawn") and (rx in (0, 7)):
 			self.squares[rx][cx] = Queen(cur.team)
+			self.generateControlMatrix()
 
 	def check(self, team: bool) -> bool:
 		'''
@@ -150,7 +149,7 @@ class Board:
 		'''
 		if the given team is stalemated
 		'''
-
+		
 		def noLegalMoves() -> bool:
 			for r in range(8):
 				for c in range(8):
@@ -178,19 +177,11 @@ class Board:
 		'''
 		generate binary/null matrix that contains info about what team each piece is on
 		'''
-
 		mtx = [[None for _ in range(8)] for _ in range(8)]
 		for r in range(8):
 			for c in range(8):
-				if cur := self.squares[r][c]:
-					mtx[r][c] = cur.team
+				mtx[r][c] = cur.team if (cur := self.squares[r][c]) else None
 		self.pos_mtx = mtx
-
-	def updatePositionMatrix(self, r: int, c: int, rx: int, cx: int) -> None:
-		self.pos_mtx[r][c], self.pos_mtx[rx][cx] = None, self.pos_mtx[r][c]
-
-	def revertPositionMatrix(self, r: int, c: int, rx: int, cx: int, p1_team: bool, p2_team: bool) -> None:
-		self.pos_mtx[r][c], self.pos_mtx[rx][cx] = p1_team, p2_team
 
 	def generateControlMatrix(self) -> None:
 		'''
@@ -206,9 +197,7 @@ class Board:
 		mtx = [[[] for _ in range(8)] for _ in range(8)]
 		for r in range(8):
 			for c in range(8):
-				# piece here
 				if cur := self.squares[r][c]:
-					# for each piece, go in all directions and mark each tile as their coord
 					match cur.__class__.__name__:
 						case "Pawn":
 							dr = -1 if cur.team else 1  # delta row
@@ -306,198 +295,96 @@ class Board:
 							pass
 		self.control_mtx = mtx
 
-	def updateControlMatrix(self, r: int, c: int, rx: int, cx: int) -> None:
+	def updateControlMatrix(self, r: int, c: int, rx: int, cx: int, p1: object, p2: object) -> None:
 		'''
-		given a move, update all relevant control squares
-		- to really optimize:
-			- if piece taken, remove all their control
-				- not taken, need to update all pieces controlling the new square
-			- then remove all rc piece's control and add to satck update all pieces controlling it's old square (in relevant directions)
-			- 
-		update moved for p,r,k
+		update the control matrix for all relevant pieces given the move p1 @ r,c -> p2 @ rx,cx
 		'''
-		'''
-		if piece @ r1,c1
-			remove all of its control
-		else
-			add all pieces controlling r1,c1 to stack
-		remove rc and it's control
-		add all pieces controlling r,c to to stack
-		remove control of all pieces (IN RELEVANT DIRECTION), add to new stack
-		move old rc -> r1c1
-		add it's control
-		add RELEVANT control for all pieces on stack
-		move r1c1 back -> rc for modularity
+
+		def inBounds(x: int) -> bool:
+			return x in range(8)
+
+		def removeAllControl(r: int, c: int) -> None:
+
+			def removeControl(r: int, c: int, rx: int, cx: int) -> None:
+				if (r, c) in self.control_mtx[rx][cx]:
+					self.control_mtx[rx][cx].remove((r, c))
+
+			match (cur := self.squares[r][c]).__class__.__name__:
+				case "Pawn":
+					dr = -1 if cur.team else 1  # delta row
+					if inBounds(r1 := r + dr):
+						# capture left
+						if inBounds(c1 := c - 1):
+							removeControl(r, c, r1, c1)
+						# capture right
+						if inBounds(c1 := c + 1):
+							removeControl(r, c, r1, c1)
+				case "Knight":
+					moves = ((1, 2), (1, -2), (-1, 2), (-1, -2),
+							 (2, 1), (2, -1), (-2, 1), (-2, -1))  # all legal moves (relative to cur pos)
+					for m in moves:
+						dr, dc = m  # delta row, col
+						if inBounds(r1 := r + dr) and inBounds(c1 := c + dc):
+							removeControl(r, c, r1, c1)
+				case "Bishop":
+					dirs = ((1, 1), (1, -1), (-1, 1), (-1, -1))  # all directions (relative)
+					for d in dirs:
+						dr, dc = d  # delta row, col
+						r1, c1 = r + dr, c + dc
+						while inBounds(r1) and inBounds(c1):
+							removeControl(r, c, r1, c1)
+							# piece here, stop
+							if self.squares[r1][c1]:
+								break
+							r1 += dr
+							c1 += dc
+				case "Rook":
+					dirs = ((1, 0), (0, 1), (-1, 0), (0, -1))  # all directions (relative)
+					for d in dirs:
+						dr, dc = d  # delta row, col
+						r1, c1 = r + dr, c + dc
+						while inBounds(r1) and inBounds(c1):
+							removeControl(r, c, r1, c1)
+							# piece here, stop
+							if self.squares[r1][c1]:
+								break
+							r1 += dr
+							c1 += dc
+				case "Queen":
+					# diagonal
+					dirs = ((1, 1), (1, -1), (-1, 1), (-1, -1))  # all directions (relative)
+					for d in dirs:
+						dr, dc = d  # delta row, col
+						r1, c1 = r + dr, c + dc
+						while inBounds(r1) and inBounds(c1):
+							removeControl(r, c, r1, c1)
+							# piece here, stop
+							if self.squares[r1][c1]:
+								break
+							r1 += dr
+							c1 += dc
+					# straight
+					dirs = ((1, 0), (0, 1), (-1, 0), (0, -1))  # all directions (relative)
+					for d in dirs:
+						dr, dc = d  # delta row, col
+						r1, c1 = r + dr, c + dc
+						while inBounds(r1) and inBounds(c1):
+							removeControl(r, c, r1, c1)
+							# piece here, stop
+							if self.squares[r1][c1]:
+								break
+							r1 += dr
+							c1 += dc
+				case "King":
+					moves = ((1, 1), (-1, -1), (1, 0), (-1, 0),
+							 (0, 1), (0, -1), (1, -1), (-1, 1))  # all legal moves (relative to cur pos)
+					for m in moves:
+						dr, dc = m  # delta row, col
+						if inBounds(r1 := r + dr) and inBounds(c1 := c + dc):
+							removeControl(r, c, r1, c1)
+				case _:
+					pass
 		
-		'''
-
-		def inBounds(x: int) -> bool:
-			return x in range(8)
-
-		def removeAllControl(r: int, c: int) -> None:
-
-			def removeControl(r: int, c: int, rx: int, cx: int) -> None:
-				if (r, c) in self.control_mtx[rx][cx]:
-					self.control_mtx[rx][cx].remove((r, c))
-			
-			match (cur := self.squares[r][c]).__class__.__name__:
-				case "Pawn":
-					dr = -1 if cur.team else 1  # delta row
-					if inBounds(r1 := r + dr):
-						# capture left
-						if inBounds(c1 := c - 1):
-							removeControl(r, c, r1, c1)
-						# capture right
-						if inBounds(c1 := c + 1):
-							removeControl(r, c, r1, c1)
-				case "Knight":
-					moves = ((1, 2), (1, -2), (-1, 2), (-1, -2),
-							 (2, 1), (2, -1), (-2, 1), (-2, -1))  # all legal moves (relative to cur pos)
-					for m in moves:
-						dr, dc = m  # delta row, col
-						if inBounds(r1 := r + dr) and inBounds(c1 := c + dc):
-							removeControl(r, c, r1, c1)
-				case "Bishop":
-					dirs = ((1, 1), (1, -1), (-1, 1), (-1, -1))  # all directions (relative)
-					for d in dirs:
-						dr, dc = d  # delta row, col
-						r1, c1 = r + dr, c + dc
-						while inBounds(r1) and inBounds(c1):
-							removeControl(r, c, r1, c1)
-							# piece here, stop
-							if self.squares[r1][c1]:
-								break
-							r1 += dr
-							c1 += dc
-				case "Rook":
-					dirs = ((1, 0), (0, 1), (-1, 0), (0, -1))  # all directions (relative)
-					for d in dirs:
-						dr, dc = d  # delta row, col
-						# same col
-						if dr:
-							r1 = r + dr
-							while inBounds(r1):
-								removeControl(r, c, r1, c)
-								# piece here, stop
-								if self.squares[r1][c]:
-									break
-								r1 += dr
-						# same row
-						else:
-							c1 = c + dc
-							while inBounds(c1):
-								removeControl(r, c, r, c1)
-								# piece here, stop
-								if self.squares[r][c1]:
-									break
-								c1 += dc
-				case "Queen":
-					# diagonals
-					dirs = ((1, 1), (1, -1), (-1, 1), (-1, -1))  # all directions (relative)
-					for d in dirs:
-						dr, dc = d  # delta row, col
-						r1, c1 = r + dr, c + dc
-						while inBounds(r1) and inBounds(c1):
-							removeControl(r, c, r1, c1)
-							# piece here, stop
-							if self.squares[r1][c1]:
-								break
-							r1 += dr
-							c1 += dc
-					# straights
-					dirs = ((1, 0), (0, 1), (-1, 0), (0, -1))  # all directions (relative)
-					for d in dirs:
-						dr, dc = d  # delta row, col
-						# same col
-						if dr:
-							r1 = r + dr
-							while inBounds(r1):
-								removeControl(r, c, r1, c)
-								# piece here, stop
-								if self.squares[r1][c]:
-									break
-								r1 += dr
-						# same row
-						else:
-							c1 = c + dc
-							while inBounds(c1):
-								removeControl(r, c, r, c1)
-								# piece here, stop
-								if self.squares[r][c1]:
-									break
-								c1 += dc
-				case "King":
-					moves = ((1, 1), (-1, -1), (1, 0), (-1, 0),
-							 (0, 1), (0, -1), (1, -1), (-1, 1))  # all legal moves (relative to cur pos)
-					for m in moves:
-						dr, dc = m  # delta row, col
-						if inBounds(r1 := r + dr) and inBounds(c1 := c + dc):
-							removeControl(r, c, r1, c1)
-				case _:
-					pass
-
-		def removeRelevantControl(r: int, c: int, rx: int, cx: int) -> None:
-			
-			def removeControl(r: int, c: int, rx: int, cx: int) -> None:
-				if (r, c) in self.control_mtx[rx][cx]:
-					self.control_mtx[rx][cx].remove((r, c))
-			
-			match self.squares[r][c].__class__.__name__:
-				case "Pawn":
-					pass
-				case "Knight":
-					pass
-				case "Bishop":
-					dr, dc = ((1 if (rx > r) else -1), (1 if (cx > c) else -1))  # direction of r1, c1
-					r1, c1 = r + dr, c + dc
-					while (r1 != (rx + dr)) and (c1 != (cx + dc)):
-						removeControl(r, c, r1, c1)
-						r1 += dr
-						c1 += dc
-				case "Rook":
-					# same col
-					if (cx == c):
-						dr = (1 if (rx > r) else -1)
-						r1 = r + dr
-						while r1 != (rx + dr):
-							removeControl(r, c, r1, c)
-							r1 += dr
-					# same row
-					else:
-						dc = (1 if (cx > c) else -1)
-						c1 = c + dc
-						while c1 != (cx + dc):
-							removeControl(r, c, r, c1)
-							c1 += dc
-				case "Queen":
-					# diagonal
-					if (cx != c) and (rx != c):
-						dr, dc = ((1 if (rx > r) else -1), (1 if (cx > c) else -1))  # direction of r1, c1
-						r1, c1 = r + dr, c + dc
-						while (r1 != (rx + dr)) and (c1 != (cx + dc)):
-							removeControl(r, c, r1, c1)
-							r1 += dr
-							c1 += dc
-					# straight
-					# same col
-					elif (cx == c):
-						dr = (1 if (rx > r) else -1)
-						r1 = r + dr
-						while r1 != (rx + dr):
-							removeControl(r, c, r1, c)
-							r1 += dr
-					# same row
-					else:
-						dc = (1 if (cx > c) else -1)
-						c1 = c + dc
-						while c1 != (cx + dc):
-							removeControl(r, c, r, c1)
-							c1 += dc
-				case "King":
-					pass
-				case _:
-					pass
-
 		def addAllControl(r: int, c: int) -> None:
 
 			def addControl(r: int, c: int, rx: int, cx: int) -> None:
@@ -537,26 +424,16 @@ class Board:
 					dirs = ((1, 0), (0, 1), (-1, 0), (0, -1))  # all directions (relative)
 					for d in dirs:
 						dr, dc = d  # delta row, col
-						# same col
-						if dr:
-							r1 = r + dr
-							while inBounds(r1):
-								addControl(r, c, r1, c)
-								# piece here, stop
-								if self.squares[r1][c]:
-									break
-								r1 += dr
-						# same row
-						else:
-							c1 = c + dc
-							while inBounds(c1):
-								addControl(r, c, r, c1)
-								# piece here, stop
-								if self.squares[r][c1]:
-									break
-								c1 += dc
+						r1, c1 = r + dr, c + dc
+						while inBounds(r1) and inBounds(c1):
+							addControl(r, c, r1, c1)
+							# piece here, stop
+							if self.squares[r1][c1]:
+								break
+							r1 += dr
+							c1 += dc
 				case "Queen":
-					# diagonals
+					# diagonal
 					dirs = ((1, 1), (1, -1), (-1, 1), (-1, -1))  # all directions (relative)
 					for d in dirs:
 						dr, dc = d  # delta row, col
@@ -568,28 +445,18 @@ class Board:
 								break
 							r1 += dr
 							c1 += dc
-					# straights
+					# straight
 					dirs = ((1, 0), (0, 1), (-1, 0), (0, -1))  # all directions (relative)
 					for d in dirs:
 						dr, dc = d  # delta row, col
-						# same col
-						if dr:
-							r1 = r + dr
-							while inBounds(r1):
-								addControl(r, c, r1, c)
-								# piece here, stop
-								if self.squares[r1][c]:
-									break
-								r1 += dr
-						# same row
-						else:
-							c1 = c + dc
-							while inBounds(c1):
-								addControl(r, c, r, c1)
-								# piece here, stop
-								if self.squares[r][c1]:
-									break
-								c1 += dc
+						r1, c1 = r + dr, c + dc
+						while inBounds(r1) and inBounds(c1):
+							addControl(r, c, r1, c1)
+							# piece here, stop
+							if self.squares[r1][c1]:
+								break
+							r1 += dr
+							c1 += dc
 				case "King":
 					moves = ((1, 1), (-1, -1), (1, 0), (-1, 0),
 							 (0, 1), (0, -1), (1, -1), (-1, 1))  # all legal moves (relative to cur pos)
@@ -599,529 +466,256 @@ class Board:
 							addControl(r, c, r1, c1)
 				case _:
 					pass
+		
 
-		def addRelevantControl(r: int, c: int, rx: int, cx: int) -> None:
-			
-			def addControl(r: int, c: int, rx: int, cx: int) -> None:
-				if (r, c) not in self.control_mtx[rx][cx]:
-					self.control_mtx[rx][cx].append((r, c))
-			
-			match self.squares[r][c].__class__.__name__:
-				case "Pawn":
-					pass
-				case "Knight":
-					pass
-				case "Bishop":
-					dr, dc = ((1 if (rx > r) else -1), (1 if (cx > c) else -1))  # direction of r1, c1
-					r1, c1 = r + dr, c + dc
-					while inBounds(r1) and inBounds(c1):
-						addControl(r, c, r1, c1)
-						# piece on this square, stop
-						if self.squares[r1][c1]:
-							break
-						r1 += dr
-						c1 += dc
-				case "Rook":
-					# same col
-					if (cx == c):
-						dr = (1 if (rx > r) else -1)
-						r1 = r + dr
-						while inBounds(r1):
-							addControl(r, c, r1, c)
-							# piece on this square, stop
-							if self.squares[r1][c]:
-								break
-							r1 += dr
-					# same row
-					else:
-						dc = (1 if (cx > c) else -1)
-						c1 = c + dc
-						while inBounds(c1):
-							addControl(r, c, r, c1)
-							# piece on this square, stop
-							if self.squares[r][c1]:
-								break
-							c1 += dc
-				case "Queen":
-					# diagonal
-					if (cx != c) and (rx != c):
-						dr, dc = ((1 if (rx > r) else -1), (1 if (cx > c) else -1))  # direction of r1, c1
-						r1, c1 = r + dr, c + dc
-						while inBounds(r1) and inBounds(c1):
-							addControl(r, c, r1, c1)
-							# piece on this square, stop
-							if self.squares[r1][c1]:
-								break
-							r1 += dr
-							c1 += dc
-					# straight
-					# same col
-					elif (cx == c):
-						dr = (1 if (rx > r) else -1)
-						r1 = r + dr
-						while inBounds(r1):
-							addControl(r, c, r1, c)
-							# piece on this square, stop
-							if self.squares[r1][c]:
-								break
-							r1 += dr
-					# same row
-					else:
-						dc = (1 if (cx > c) else -1)
-						c1 = c + dc
-						while inBounds(c1):
-							addControl(r, c, r, c1)
-							# piece on this square, stop
-							if self.squares[r][c1]:
-								break
-							c1 += dc
-				case "King":
-					pass
-				case _:
-					pass
-
-		# stacks for r,c and rx,cx of pieces that need their relevant control removed/added back
-		remove, add = [], []
-		remove_x, add_x = [], []
-		p1, p2 = self.squares[r][c], self.squares[rx][cx]  # piece and (possible) piece being captured
-		p1_moved = p1.moved if hasattr(p1, "moved") else None
-		# capturing piece
-		if self.squares[rx][cx]:
-			removeAllControl(rx, cx)
-		else:
-			# all pieces controlling rc,rx need to have their control updated
-			for p in self.control_mtx[rx][cx]:
-				remove_x.append(p)
-		# all pieces controlling r,c need to have their control updated
-		for p in self.control_mtx[r][c]:
-			remove.append(p)
-		# remove all of piece 1's control
-		removeAllControl(r, c)
-		# remove relevant control of affected pieces
-		while remove:
-			top = r1, c1 = remove.pop()
-			add.append(top)
-			removeRelevantControl(r1, c1, r, c)
-		while remove_x:
-			top = r1, c1 = remove_x.pop()
-			add_x.append(top)
-			removeRelevantControl(r1, c1, rx, cx)
-		# (temporarily) move p1 to rx,cx
-		self.move(r, c, rx, cx)
-		# add back all control
-		addAllControl(rx, cx)
-		while add:
-			r1, c1 = add.pop()
-			addRelevantControl(r1, c1, r, c)
-		while add_x:
-			r1, c1 = add_x.pop()
-			addRelevantControl(r1, c1, r, c)
-		# move p1 back for modularity
-		self.undoMove(r, c, rx, cx, p1, p2, p1_moved)
-
-	def revertControlMatrix(self, r: int, c: int, rx: int, cx: int, p1: object, p2: object, p1_moved: bool) -> None:
 		'''
-		given a move, update all relevant control squares
-		- to really optimize:
-			- if piece taken, remove all their control
-				- not taken, need to update all pieces controlling the new square
-			- then remove all rc piece's control and add to satck update all pieces controlling it's old square (in relevant directions)
-			- 
-		update moved for p,r,k
+		1) pretend p1 @ r,c, remove its control
+		2) pretend p2 @ rx,cx, remove its control
+		3) add all pieces targeting r and rc to stack, also remove their control
+		4) add p1 control to rx, cx
+		5) add back control for all affected pieces
 		'''
-		'''
-		if piece2 is None
-			(rx,cx)
-			add all pieces to have relevant control removed to stack
-		add all pieces targeting rc to relevant remove stack
-		remove rx,cx control
-		remove relevant control from everything, move to add
-		undo move r,c,rx,cx
-		add all control to rc
-		add relevant control back to everything
-		re-move r,c,rx,cx
-		'''
-
-		def inBounds(x: int) -> bool:
-			return x in range(8)
-
-		def removeAllControl(r: int, c: int) -> None:
-
-			def removeControl(r: int, c: int, rx: int, cx: int) -> None:
-				if (r, c) in self.control_mtx[rx][cx]:
-					self.control_mtx[rx][cx].remove((r, c))
-			
-			match (cur := self.squares[r][c]).__class__.__name__:
-				case "Pawn":
-					dr = -1 if cur.team else 1  # delta row
-					if inBounds(r1 := r + dr):
-						# capture left
-						if inBounds(c1 := c - 1):
-							removeControl(r, c, r1, c1)
-						# capture right
-						if inBounds(c1 := c + 1):
-							removeControl(r, c, r1, c1)
-				case "Knight":
-					moves = ((1, 2), (1, -2), (-1, 2), (-1, -2),
-							 (2, 1), (2, -1), (-2, 1), (-2, -1))  # all legal moves (relative to cur pos)
-					for m in moves:
-						dr, dc = m  # delta row, col
-						if inBounds(r1 := r + dr) and inBounds(c1 := c + dc):
-							removeControl(r, c, r1, c1)
-				case "Bishop":
-					dirs = ((1, 1), (1, -1), (-1, 1), (-1, -1))  # all directions (relative)
-					for d in dirs:
-						dr, dc = d  # delta row, col
-						r1, c1 = r + dr, c + dc
-						while inBounds(r1) and inBounds(c1):
-							removeControl(r, c, r1, c1)
-							# piece here, stop
-							if self.squares[r1][c1]:
-								break
-							r1 += dr
-							c1 += dc
-				case "Rook":
-					dirs = ((1, 0), (0, 1), (-1, 0), (0, -1))  # all directions (relative)
-					for d in dirs:
-						dr, dc = d  # delta row, col
-						# same col
-						if dr:
-							r1 = r + dr
-							while inBounds(r1):
-								removeControl(r, c, r1, c)
-								# piece here, stop
-								if self.squares[r1][c]:
-									break
-								r1 += dr
-						# same row
-						else:
-							c1 = c + dc
-							while inBounds(c1):
-								removeControl(r, c, r, c1)
-								# piece here, stop
-								if self.squares[r][c1]:
-									break
-								c1 += dc
-				case "Queen":
-					# diagonals
-					dirs = ((1, 1), (1, -1), (-1, 1), (-1, -1))  # all directions (relative)
-					for d in dirs:
-						dr, dc = d  # delta row, col
-						r1, c1 = r + dr, c + dc
-						while inBounds(r1) and inBounds(c1):
-							removeControl(r, c, r1, c1)
-							# piece here, stop
-							if self.squares[r1][c1]:
-								break
-							r1 += dr
-							c1 += dc
-					# straights
-					dirs = ((1, 0), (0, 1), (-1, 0), (0, -1))  # all directions (relative)
-					for d in dirs:
-						dr, dc = d  # delta row, col
-						# same col
-						if dr:
-							r1 = r + dr
-							while inBounds(r1):
-								removeControl(r, c, r1, c)
-								# piece here, stop
-								if self.squares[r1][c]:
-									break
-								r1 += dr
-						# same row
-						else:
-							c1 = c + dc
-							while inBounds(c1):
-								removeControl(r, c, r, c1)
-								# piece here, stop
-								if self.squares[r][c1]:
-									break
-								c1 += dc
-				case "King":
-					moves = ((1, 1), (-1, -1), (1, 0), (-1, 0),
-							 (0, 1), (0, -1), (1, -1), (-1, 1))  # all legal moves (relative to cur pos)
-					for m in moves:
-						dr, dc = m  # delta row, col
-						if inBounds(r1 := r + dr) and inBounds(c1 := c + dc):
-							removeControl(r, c, r1, c1)
-				case _:
-					pass
-
-		def removeRelevantControl(r: int, c: int, rx: int, cx: int) -> None:
-			
-			def removeControl(r: int, c: int, rx: int, cx: int) -> None:
-				if (r, c) in self.control_mtx[rx][cx]:
-					self.control_mtx[rx][cx].remove((r, c))
-			
-			match self.squares[r][c].__class__.__name__:
-				case "Pawn":
-					pass
-				case "Knight":
-					pass
-				case "Bishop":
-					dr, dc = ((1 if (rx > r) else -1), (1 if (cx > c) else -1))  # direction of r1, c1
-					r1, c1 = r + dr, c + dc
-					while inBounds(r1) and inBounds(c1):
-						removeControl(r, c, r1, c1)
-						# piece on this square, stop
-						if self.squares[r1][c1]:
-							break
-						r1 += dr
-						c1 += dc
-				case "Rook":
-					# same col
-					if (cx == c):
-						dr = (1 if (rx > r) else -1)
-						r1 = r + dr
-						while inBounds(r1):
-							removeControl(r, c, r1, c)
-							# piece on this square, stop
-							if self.squares[r1][c]:
-								break
-							r1 += dr
-					# same row
-					else:
-						dc = (1 if (cx > c) else -1)
-						c1 = c + dc
-						while inBounds(c1):
-							removeControl(r, c, r, c1)
-							# piece on this square, stop
-							if self.squares[r][c1]:
-								break
-							c1 += dc
-				case "Queen":
-					# diagonal
-					if (cx != c) and (rx != c):
-						dr, dc = ((1 if (rx > r) else -1), (1 if (cx > c) else -1))  # direction of r1, c1
-						r1, c1 = r + dr, c + dc
-						while inBounds(r1) and inBounds(c1):
-							removeControl(r, c, r1, c1)
-							# piece on this square, stop
-							if self.squares[r1][c1]:
-								break
-							r1 += dr
-							c1 += dc
-					# straight
-					# same col
-					elif (cx == c):
-						dr = (1 if (rx > r) else -1)
-						r1 = r + dr
-						while inBounds(r1):
-							removeControl(r, c, r1, c)
-							# piece on this square, stop
-							if self.squares[r1][c]:
-								break
-							r1 += dr
-					# same row
-					else:
-						dc = (1 if (cx > c) else -1)
-						c1 = c + dc
-						while inBounds(c1):
-							removeControl(r, c, r, c1)
-							# piece on this square, stop
-							if self.squares[r][c1]:
-								break
-							c1 += dc
-				case "King":
-					pass
-				case _:
-					pass
-
-		def addAllControl(r: int, c: int) -> None:
-
-			def addControl(r: int, c: int, rx: int, cx: int) -> None:
-				if (r, c) not in self.control_mtx[rx][cx]:
-					self.control_mtx[rx][cx].append((r, c))
-
-			match (cur := self.squares[r][c]).__class__.__name__:
-				case "Pawn":
-					dr = -1 if cur.team else 1  # delta row
-					if inBounds(r1 := r + dr):
-						# capture left
-						if inBounds(c1 := c - 1):
-							addControl(r, c, r1, c1)
-						# capture right
-						if inBounds(c1 := c + 1):
-							addControl(r, c, r1, c1)
-				case "Knight":
-					moves = ((1, 2), (1, -2), (-1, 2), (-1, -2),
-							 (2, 1), (2, -1), (-2, 1), (-2, -1))  # all legal moves (relative to cur pos)
-					for m in moves:
-						dr, dc = m  # delta row, col
-						if inBounds(r1 := r + dr) and inBounds(c1 := c + dc):
-							addControl(r, c, r1, c1)
-				case "Bishop":
-					dirs = ((1, 1), (1, -1), (-1, 1), (-1, -1))  # all directions (relative)
-					for d in dirs:
-						dr, dc = d  # delta row, col
-						r1, c1 = r + dr, c + dc
-						while inBounds(r1) and inBounds(c1):
-							addControl(r, c, r1, c1)
-							# piece here, stop
-							if self.squares[r1][c1]:
-								break
-							r1 += dr
-							c1 += dc
-				case "Rook":
-					dirs = ((1, 0), (0, 1), (-1, 0), (0, -1))  # all directions (relative)
-					for d in dirs:
-						dr, dc = d  # delta row, col
-						# same col
-						if dr:
-							r1 = r + dr
-							while inBounds(r1):
-								addControl(r, c, r1, c)
-								# piece here, stop
-								if self.squares[r1][c]:
-									break
-								r1 += dr
-						# same row
-						else:
-							c1 = c + dc
-							while inBounds(c1):
-								addControl(r, c, r, c1)
-								# piece here, stop
-								if self.squares[r][c1]:
-									break
-								c1 += dc
-				case "Queen":
-					# diagonals
-					dirs = ((1, 1), (1, -1), (-1, 1), (-1, -1))  # all directions (relative)
-					for d in dirs:
-						dr, dc = d  # delta row, col
-						r1, c1 = r + dr, c + dc
-						while inBounds(r1) and inBounds(c1):
-							addControl(r, c, r1, c1)
-							# piece here, stop
-							if self.squares[r1][c1]:
-								break
-							r1 += dr
-							c1 += dc
-					# straights
-					dirs = ((1, 0), (0, 1), (-1, 0), (0, -1))  # all directions (relative)
-					for d in dirs:
-						dr, dc = d  # delta row, col
-						# same col
-						if dr:
-							r1 = r + dr
-							while inBounds(r1):
-								addControl(r, c, r1, c)
-								# piece here, stop
-								if self.squares[r1][c]:
-									break
-								r1 += dr
-						# same row
-						else:
-							c1 = c + dc
-							while inBounds(c1):
-								addControl(r, c, r, c1)
-								# piece here, stop
-								if self.squares[r][c1]:
-									break
-								c1 += dc
-				case "King":
-					moves = ((1, 1), (-1, -1), (1, 0), (-1, 0),
-							 (0, 1), (0, -1), (1, -1), (-1, 1))  # all legal moves (relative to cur pos)
-					for m in moves:
-						dr, dc = m  # delta row, col
-						if inBounds(r1 := r + dr) and inBounds(c1 := c + dc):
-							addControl(r, c, r1, c1)
-				case _:
-					pass
-
-		def addRelevantControl(r: int, c: int, rx: int, cx: int) -> None:
-			
-			def addControl(r: int, c: int, rx: int, cx: int) -> None:
-				if (r, c) not in self.control_mtx[rx][cx]:
-					self.control_mtx[rx][cx].append((r, c))
-			
-			match self.squares[r][c].__class__.__name__:
-				case "Pawn":
-					pass
-				case "Knight":
-					pass
-				case "Bishop":
-					dr, dc = ((1 if (rx > r) else -1), (1 if (cx > c) else -1))  # direction of r1, c1
-					r1, c1 = r + dr, c + dc
-					while (r1 != (rx + dr)) and (c1 != (cx + dc)):
-						addControl(r, c, r1, c1)
-						r1 += dr
-						c1 += dc
-				case "Rook":
-					# same col
-					if (cx == c):
-						dr = (1 if (rx > r) else -1)
-						r1 = r + dr
-						while r1 != (rx + dr):
-							addControl(r, c, r1, c)
-							r1 += dr
-					# same row
-					else:
-						dc = (1 if (cx > c) else -1)
-						c1 = c + dc
-						while c1 != (cx + dc):
-							addControl(r, c, r, c1)
-							c1 += dc
-				case "Queen":
-					# diagonal
-					if (cx != c) and (rx != c):
-						dr, dc = ((1 if (rx > r) else -1), (1 if (cx > c) else -1))  # direction of r1, c1
-						r1, c1 = r + dr, c + dc
-						while (r1 != (rx + dr)) and (c1 != (cx + dc)):
-							addControl(r, c, r1, c1)
-							r1 += dr
-							c1 += dc
-					# straight
-					# same col
-					elif (cx == c):
-						dr = (1 if (rx > r) else -1)
-						r1 = r + dr
-						while r1 != (rx + dr):
-							addControl(r, c, r1, c)
-							r1 += dr
-					# same row
-					else:
-						dc = (1 if (cx > c) else -1)
-						c1 = c + dc
-						while c1 != (cx + dc):
-							addControl(r, c, r, c1)
-							c1 += dc
-				case "King":
-					pass
-				case _:
-					pass
-
-		# stacks for r,c and rx,cx of pieces that need their relevant control removed/added back
-		remove, add = [], []
-		remove_x, add_x = [], []
-		# not a capture
-		if not p2:
-			for p in self.control_mtx[rx][cx]:
-				remove_x.append(p)
-		for p in self.control_mtx[r][c]:
-			remove.append(p)
-		# remove all relevant control of affected pieces
+		pcs = []  # list of affected pieces
+		# remove p2's control from rx,cx
+		self.squares[rx][cx] = p2
 		removeAllControl(rx, cx)
-		while remove:
-			top = r1, c1 = remove.pop()
-			add.append(top)
-			removeRelevantControl(r1, c1, r, c)
-		while remove_x:
-			top = r1, c1 = remove_x.pop()
-			add_x.append(top)
-			removeRelevantControl(r1, c1, rx, cx)
-		# (temporarily) undo move
-		self.undoMove(r, c, rx, cx, p1, p2, p1_moved)
-		# add relevant control back for affected pieces
+		self.squares[rx][cx] = None
+		# remove p1's control from r,c
+		self.squares[r][c] = p1
+		removeAllControl(r, c)
+		self.squares[r][c] = None
+		# remove control from all pieces controlling either r,c or rx,cx
+		for p in tuple(self.control_mtx[r][c]):
+			pr, pc = p
+			removeAllControl(pr, pc)
+			pcs.append(p)
+		for p in tuple(self.control_mtx[rx][cx]):
+			pr, pc = p
+			removeAllControl(pr, pc)
+			pcs.append(p)
+		# add control back to all affected pieces
+		# put p1 back on rx,cx
+		self.squares[rx][cx] = p1
+		addAllControl(rx, cx)
+		for p in pcs:
+			pr, pc = p
+			addAllControl(pr, pc)
+
+	
+	# BUG: removing diff pieces makes the bishop act up
+	# currently, bishop sees through pawn on d6
+	# if you remove b2 knight, bishop no longer sees through d6
+	# if you remove d8 queen, bishop no longer sees through d6, other bishop sees through e6
+	
+	#// BUG: (prob for both) when undo-ing a move, the piece is moved back to its initial square, so
+	#// pieces controlling past that squares (say rook 7,0 -> 5,0), will stop removing control @ 6,0
+	#// because that's where the pawn is
+	#// FIX: set that tile to null until you add it back in the end
+
+	def revertControlMatrix(self, r: int, c: int, rx: int, cx: int, p1: object, p2: object) -> None:
+		'''
+		revert the control matrix to before the move p1 @ r,c -> p2 @ rx,cx
+		'''
+
+		def inBounds(x: int) -> bool:
+			return x in range(8)
+
+		def removeAllControl(r: int, c: int) -> None:
+
+			def removeControl(r: int, c: int, rx: int, cx: int) -> None:
+				if (r, c) in self.control_mtx[rx][cx]:
+					self.control_mtx[rx][cx].remove((r, c))
+				
+			match (cur := self.squares[r][c]).__class__.__name__:
+				case "Pawn":
+					dr = -1 if cur.team else 1  # delta row
+					if inBounds(r1 := r + dr):
+						# capture left
+						if inBounds(c1 := c - 1):
+							removeControl(r, c, r1, c1)
+						# capture right
+						if inBounds(c1 := c + 1):
+							removeControl(r, c, r1, c1)
+				case "Knight":
+					moves = ((1, 2), (1, -2), (-1, 2), (-1, -2),
+							 (2, 1), (2, -1), (-2, 1), (-2, -1))  # all legal moves (relative to cur pos)
+					for m in moves:
+						dr, dc = m  # delta row, col
+						if inBounds(r1 := r + dr) and inBounds(c1 := c + dc):
+							removeControl(r, c, r1, c1)
+				case "Bishop":
+					dirs = ((1, 1), (1, -1), (-1, 1), (-1, -1))  # all directions (relative)
+					for d in dirs:
+						dr, dc = d  # delta row, col
+						r1, c1 = r + dr, c + dc
+						while inBounds(r1) and inBounds(c1):
+							removeControl(r, c, r1, c1)
+							# piece here, stop
+							if self.squares[r1][c1]:
+								break
+							r1 += dr
+							c1 += dc
+				case "Rook":
+					dirs = ((1, 0), (0, 1), (-1, 0), (0, -1))  # all directions (relative)
+					for d in dirs:
+						dr, dc = d  # delta row, col
+						r1, c1 = r + dr, c + dc
+						while inBounds(r1) and inBounds(c1):
+							removeControl(r, c, r1, c1)
+							# piece here, stop
+							if self.squares[r1][c1]:
+								break
+							r1 += dr
+							c1 += dc
+				case "Queen":
+					# diagonal
+					dirs = ((1, 1), (1, -1), (-1, 1), (-1, -1))  # all directions (relative)
+					for d in dirs:
+						dr, dc = d  # delta row, col
+						r1, c1 = r + dr, c + dc
+						while inBounds(r1) and inBounds(c1):
+							removeControl(r, c, r1, c1)
+							# piece here, stop
+							if self.squares[r1][c1]:
+								break
+							r1 += dr
+							c1 += dc
+					# straight
+					dirs = ((1, 0), (0, 1), (-1, 0), (0, -1))  # all directions (relative)
+					for d in dirs:
+						dr, dc = d  # delta row, col
+						r1, c1 = r + dr, c + dc
+						while inBounds(r1) and inBounds(c1):
+							removeControl(r, c, r1, c1)
+							# piece here, stop
+							if self.squares[r1][c1]:
+								break
+							r1 += dr
+							c1 += dc
+				case "King":
+					moves = ((1, 1), (-1, -1), (1, 0), (-1, 0),
+							 (0, 1), (0, -1), (1, -1), (-1, 1))  # all legal moves (relative to cur pos)
+					for m in moves:
+						dr, dc = m  # delta row, col
+						if inBounds(r1 := r + dr) and inBounds(c1 := c + dc):
+							removeControl(r, c, r1, c1)
+				case _:
+					pass
+		
+		def addAllControl(r: int, c: int) -> None:
+
+			def addControl(r: int, c: int, rx: int, cx: int) -> None:
+				if (r, c) not in self.control_mtx[rx][cx]:
+					self.control_mtx[rx][cx].append((r, c))
+
+			match (cur := self.squares[r][c]).__class__.__name__:
+				case "Pawn":
+					dr = -1 if cur.team else 1  # delta row
+					if inBounds(r1 := r + dr):
+						# capture left
+						if inBounds(c1 := c - 1):
+							addControl(r, c, r1, c1)
+						# capture right
+						if inBounds(c1 := c + 1):
+							addControl(r, c, r1, c1)
+				case "Knight":
+					moves = ((1, 2), (1, -2), (-1, 2), (-1, -2),
+							 (2, 1), (2, -1), (-2, 1), (-2, -1))  # all legal moves (relative to cur pos)
+					for m in moves:
+						dr, dc = m  # delta row, col
+						if inBounds(r1 := r + dr) and inBounds(c1 := c + dc):
+							addControl(r, c, r1, c1)
+				case "Bishop":
+					dirs = ((1, 1), (1, -1), (-1, 1), (-1, -1))  # all directions (relative)
+					for d in dirs:
+						dr, dc = d  # delta row, col
+						r1, c1 = r + dr, c + dc
+						while inBounds(r1) and inBounds(c1):
+							addControl(r, c, r1, c1)
+							# piece here, stop
+							if self.squares[r1][c1]:
+								break
+							r1 += dr
+							c1 += dc
+				case "Rook":
+					dirs = ((1, 0), (0, 1), (-1, 0), (0, -1))  # all directions (relative)
+					for d in dirs:
+						dr, dc = d  # delta row, col
+						r1, c1 = r + dr, c + dc
+						while inBounds(r1) and inBounds(c1):
+							addControl(r, c, r1, c1)
+							# piece here, stop
+							if self.squares[r1][c1]:
+								break
+							r1 += dr
+							c1 += dc
+				case "Queen":
+					# diagonal
+					dirs = ((1, 1), (1, -1), (-1, 1), (-1, -1))  # all directions (relative)
+					for d in dirs:
+						dr, dc = d  # delta row, col
+						r1, c1 = r + dr, c + dc
+						while inBounds(r1) and inBounds(c1):
+							addControl(r, c, r1, c1)
+							# piece here, stop
+							if self.squares[r1][c1]:
+								break
+							r1 += dr
+							c1 += dc
+					# straight
+					dirs = ((1, 0), (0, 1), (-1, 0), (0, -1))  # all directions (relative)
+					for d in dirs:
+						dr, dc = d  # delta row, col
+						r1, c1 = r + dr, c + dc
+						while inBounds(r1) and inBounds(c1):
+							addControl(r, c, r1, c1)
+							# piece here, stop
+							if self.squares[r1][c1]:
+								break
+							r1 += dr
+							c1 += dc
+				case "King":
+					moves = ((1, 1), (-1, -1), (1, 0), (-1, 0),
+							 (0, 1), (0, -1), (1, -1), (-1, 1))  # all legal moves (relative to cur pos)
+					for m in moves:
+						dr, dc = m  # delta row, col
+						if inBounds(r1 := r + dr) and inBounds(c1 := c + dc):
+							addControl(r, c, r1, c1)
+				case _:
+					pass
+
+		'''
+		(just after undo move, so p1 is @r,c and p2 @ rx,cx)
+		1) pretend p1 @ rx,cx, remove control
+		2) remove control from all targeting r,c and rx,cx
+		3) add control back to r,c (p1 already there)
+		4) add control back to pcs
+		'''	
+		pcs = []  # list of affected pieces
+		# remove p2 from r,c
+		self.squares[r][c] = None
+		# remove p1's control from rx,cx
+		self.squares[rx][cx] = p1
+		removeAllControl(rx, cx)
+		self.squares[rx][cx] = None
+		# remove control from all pieces targeting r,c or rx,cx
+		for p in tuple(self.control_mtx[r][c]):
+			pr, pc = p
+			removeAllControl(pr, pc)
+			pcs.append(p)
+		for p in tuple(self.control_mtx[rx][cx]):
+			pr, pc = p
+			removeAllControl(pr, pc)
+			pcs.append(p)
+		# add control back to all affected pieces
+		# put p1, p2 back
+		self.squares[r][c] = p1
+		self.squares[rx][cx] = p2
 		addAllControl(r, c)
-		while add:
-			r1, c1 = add.pop()
-			addRelevantControl(r1, c1, r, c)
-		while add_x:
-			r1, c1 = add_x.pop()
-			addRelevantControl(r1, c1, rx, cx)
-		# redo move for modularity
-		self.move(r, c, rx, cx) 
+		addAllControl(rx, cx)
+		for p in pcs:
+			pr, pc = p
+			addAllControl(pr, pc)
 
 	def generateLegalMoves(self, team: bool) -> None:
 		'''
@@ -1132,37 +726,34 @@ class Board:
 			return x in range(8)
 
 		def addMove(r: int, c: int, rx: int, cx: int) -> None:
-			mtx[rx][cx].append((r, c))
+			# if (rx, cx) no t in mtx[r][c]:
+			mtx[r][c].append((rx, cx))
 
 		def inCheckAfter(r: int, c: int, rx: int, cx: int) -> bool:
 			# store relevant info before trying move
 			p1, p2 = self.squares[r][c], self.squares[rx][cx]
 			p1_moved = p1.moved if hasattr(p1, "moved") else None
-			p2_team = p2.team if hasattr(p2, "team") else None
 			# try move
-			self.updateControlMatrix(r, c, rx, cx)
-			self.updatePositionMatrix(r, c, rx, cx)
 			self.move(r, c, rx, cx)
-			# in check after move?
-			check = self.check(team)
+			self.updateControlMatrix(r, c, rx, cx, p1, p2)
+			self.generatePositionMatrix()
+			check = self.check(team)  # in check after move?
 			# undo move
-			self.revertControlMatrix(r, c, rx, cx, p1, p2, p1_moved)
-			self.revertPositionMatrix(r, c, rx, cx, p1.team, p2_team)
-			self.undoMove(r, c, rx, cx, p1, p2, p1_moved)
+			self.undo(r, c, rx, cx, p1, p2, p1_moved)
+			self.revertControlMatrix(r, c, rx, cx, p1, p2)
+			self.generatePositionMatrix()
 			return check
 
 		mtx = [[[] for _ in range(8)] for _ in range(8)]
 		for r in range(8):
 			for c in range(8):
-				# piece here
 				if (cur := self.squares[r][c]) and (cur.team == team):
-					# for each piece, go in all directions and mark each tile as their coord
 					match cur.__class__.__name__:
 						case "Pawn":
 							dr = -1 if cur.team else 1  # delta row
 							if inBounds(r1 := r + dr):
 								# push 1
-								if not self.squares[r1][c] and (not inCheckAfter(r, c, r1, c)):
+								if (not self.squares[r1][c]) and (not inCheckAfter(r, c, r1, c)):
 									addMove(r, c, r1, c)
 									# push 2 (first push only)
 									if inBounds(r2 := r1 + dr) and (not cur.moved) and \
@@ -1182,8 +773,7 @@ class Board:
 							for m in moves:
 								dr, dc = m  # delta row, col
 								if inBounds(r1 := r + dr) and inBounds(c1 := c + dc) and \
-									(self.pos_mtx[r1][c1] != team) and ((r, c) in self.control_mtx[r1][c1]) \
-										and (not inCheckAfter(r, c, r1, c1)):
+									(self.pos_mtx[r1][c1] != team) and (not inCheckAfter(r, c, r1, c1)):
 									addMove(r, c, r1, c1)
 						case "Bishop":
 							dirs = ((1, 1), (1, -1), (-1, 1), (-1, -1))  # all directions (relative)
@@ -1191,7 +781,7 @@ class Board:
 								dr, dc = d  # delta row, col
 								r1, c1 = r + dr, c + dc
 								while inBounds(r1) and inBounds(c1) and (self.pos_mtx[r1][c1] != team) \
-									and ((r, c) in self.control_mtx[r1][c1]) and (not inCheckAfter(r, c, r1, c1)):
+									and (not inCheckAfter(r, c, r1, c1)):
 									addMove(r, c, r1, c1)
 									# piece here, stop
 									if self.squares[r1][c1]:
@@ -1202,26 +792,15 @@ class Board:
 							dirs = ((1, 0), (0, 1), (-1, 0), (0, -1))  # all directions (relative)
 							for d in dirs:
 								dr, dc = d  # delta row, col
-								# same col
-								if dr:
-									r1 = r + dr
-									while inBounds(r1) and (self.pos_mtx[r1][c] != team) and ((r, c) in self.control_mtx[r1][c]) \
-										and (not inCheckAfter(r, c, r1, c)):
-										addMove(r, c, r1, c)
-										# piece here, stop
-										if self.squares[r1][c]:
-											break
-										r1 += dr
-								# same row
-								else:
-									c1 = c + dc
-									while inBounds(c1) and (self.pos_mtx[r][c1] != team) and ((r, c) in self.control_mtx[r][c1]) \
-										and (not inCheckAfter(r, c, r, c1)):
-										addMove(r, c, r, c1)
-										# piece here, stop
-										if self.squares[r][c1]:
-											break
-										c1 += dc
+								r1, c1 = r + dr, c + dc
+								while inBounds(r1) and inBounds(c1) and (self.pos_mtx[r1][c1] != team) \
+									and (not inCheckAfter(r, c, r1, c1)):
+									addMove(r, c, r1, c1)
+									# piece here, stop
+									if self.squares[r1][c1]:
+										break
+									r1 += dr
+									c1 += dc
 						case "Queen":
 							# diagonals
 							dirs = ((1, 1), (1, -1), (-1, 1), (-1, -1))  # all directions (relative)
@@ -1229,7 +808,7 @@ class Board:
 								dr, dc = d  # delta row, col
 								r1, c1 = r + dr, c + dc
 								while inBounds(r1) and inBounds(c1) and (self.pos_mtx[r1][c1] != team) \
-									and ((r, c) in self.control_mtx[r1][c1]) and (not inCheckAfter(r, c, r1, c1)):
+									and (not inCheckAfter(r, c, r1, c1)):
 									addMove(r, c, r1, c1)
 									# piece here, stop
 									if self.squares[r1][c1]:
@@ -1240,26 +819,15 @@ class Board:
 							dirs = ((1, 0), (0, 1), (-1, 0), (0, -1))  # all directions (relative)
 							for d in dirs:
 								dr, dc = d  # delta row, col
-								# same col
-								if dr:
-									r1 = r + dr
-									while inBounds(r1) and (self.pos_mtx[r1][c] != team) and ((r, c) in self.control_mtx[r1][c]) \
-										and (not inCheckAfter(r, c, r1, c)):
-										addMove(r, c, r1, c)
-										# piece here, stop
-										if self.squares[r1][c]:
-											break
-										r1 += dr
-								# same row
-								else:
-									c1 = c + dc
-									while inBounds(c1) and (self.pos_mtx[r][c1] != team) and ((r, c) in self.control_mtx[r][c1]) \
-										and (not inCheckAfter(r, c, r, c1)):
-										addMove(r, c, r, c1)
-										# piece here, stop
-										if self.squares[r][c1]:
-											break
-										c1 += dc
+								r1, c1 = r + dr, c + dc
+								while inBounds(r1) and inBounds(c1) and (self.pos_mtx[r1][c1] != team) \
+									and (not inCheckAfter(r, c, r1, c1)):
+									addMove(r, c, r1, c1)
+									# piece here, stop
+									if self.squares[r1][c1]:
+										break
+									r1 += dr
+									c1 += dc
 						case "King":
 							moves = ((1, 1), (-1, -1), (1, 0), (-1, 0),
 									 (0, 1), (0, -1), (1, -1), (-1, 1))  # all legal moves (relative to cur pos)
@@ -1312,6 +880,7 @@ class Board:
 		print("  +------------------------+")
 
 	def printPositionMatrix(self) -> None:
+		print("*********\nPOSITION MATRIX:\n\n")
 		for r in range(8):
 			for c in range(8):
 				match self.pos_mtx[r][c]:
@@ -1327,15 +896,15 @@ class Board:
 	def printControlMatrix(self) -> None:
 		print("*********\nCONTROL MATRIX:\n\n")
 		for r in range(8):
-			print(f"ROW {r}:")
+			print(f"row {r}: ", end="")
 			for c in range(8):
-				print(f"({r},{c}) ->", self.control_mtx[r][c])
+				print(self.control_mtx[r][c], end=" _ ")
 			print("\n")
 
 	def printLegalMoves(self) -> None:
 		print("*********\nLEGAL MOVES:\n\n")
 		for r in range(8):
-			print(f"ROW {r}:")
+			print(f"row {r}: ", end="")
 			for c in range(8):
-				print(f"({r},{c}) ->", self.legal_moves[r][c])
+				print(self.legal_moves[r][c], end=" _ ")
 			print("\n")
