@@ -83,8 +83,18 @@ class Engine:
 						* (cur.value if cur.team else -cur.value)
 		return score
 	
+	def controlEvaluate(self, board: object) -> int: 
+		# based on the amount of spaces a piece controls * its piece value (Knight as the beginning of the game controls 2 spaces. * 3 = 6)
+		score = 0
+		for r in range(8):
+			for c in range(8):
+				if cur := board.squares[r][c]:
+					score += len(board.control_mtx[r][c]) * (cur.value if cur.team else -cur.value)
+		return score
+	
 	def evaluate(self, board: object) -> int:
 		# NOTE: slightly inefficient to run through board separately, easier to read and understand weights
 		pos_score = 0.15 * self.positionEvaluate(board)
 		mat_score = 46 * self.materialEvaluate(board)
-		return pos_score + mat_score
+		ctl_score = 1 * self.controlEvaluate(board)
+		return pos_score + mat_score + ctl_score

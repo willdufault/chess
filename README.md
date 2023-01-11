@@ -17,5 +17,7 @@ chess with ai by will dufault and mattheus faria
 	- a very simple 0-depth engine that evaluates the current board based on
 		- positional advantage: if pieces are on good squares (see position_scores in models/engine.py)
 		- material advantage: simple calculation, sum of white piece values minus sum of black piece values
+		- space-control adavantage: an evaluation based on how many spaces a piece "controls" multiplied by its piece value 
+			- ex: A knight at the start of the game controls 2 spaces, multiplied by its piece value of 3, one knight has a control evaluation of 6
 - the AI (bot.py)
 	- uses an optimized version of minimax with alpha-beta pruning and memoization to look ahead and select moves

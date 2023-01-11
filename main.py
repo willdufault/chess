@@ -110,7 +110,7 @@ def playBot() -> None:
 			break
 		if model.board.check(team):
 			print("you're in check.\n")
-			print("bot thinking...")
+		print("bot thinking...")
 		last_move = model.bot.bestMove(model.board, team, model.move_cnt)
 		model.updateMoveCount()
 		# switch teams
