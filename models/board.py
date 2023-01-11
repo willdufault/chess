@@ -151,11 +151,7 @@ class Board:
 		'''
 		
 		def noLegalMoves() -> bool:
-			for r in range(8):
-				for c in range(8):
-					if self.legal_moves[r][c]:
-						return False
-			return True
+			return not self.legal_moves
 
 		return (move_cnt == 200) or ((not self.check(team)) and noLegalMoves())
 	
@@ -165,11 +161,7 @@ class Board:
 		'''
 
 		def noLegalMoves() -> bool:
-			for r in range(8):
-				for c in range(8):
-					if self.legal_moves[r][c]:
-						return False
-			return True
+			return not self.legal_moves
 
 		return self.check(team) and noLegalMoves()
 	
@@ -467,10 +459,9 @@ class Board:
 				case _:
 					pass
 		
-
 		'''
-		1) pretend p1 @ r,c, remove its control
-		2) pretend p2 @ rx,cx, remove its control
+		1) pretend p2 @ rx,cx, remove its control (so not in the way of p1-targeting pieces control)
+		2) pretend p1 @ r,c, remove its control
 		3) add all pieces targeting r and rc to stack, also remove their control
 		4) add p1 control to rx, cx
 		5) add back control for all affected pieces
@@ -500,17 +491,6 @@ class Board:
 		for p in pcs:
 			pr, pc = p
 			addAllControl(pr, pc)
-
-	
-	# BUG: removing diff pieces makes the bishop act up
-	# currently, bishop sees through pawn on d6
-	# if you remove b2 knight, bishop no longer sees through d6
-	# if you remove d8 queen, bishop no longer sees through d6, other bishop sees through e6
-	
-	#// BUG: (prob for both) when undo-ing a move, the piece is moved back to its initial square, so
-	#// pieces controlling past that squares (say rook 7,0 -> 5,0), will stop removing control @ 6,0
-	#// because that's where the pawn is
-	#// FIX: set that tile to null until you add it back in the end
 
 	def revertControlMatrix(self, r: int, c: int, rx: int, cx: int, p1: object, p2: object) -> None:
 		'''
@@ -686,7 +666,7 @@ class Board:
 
 		'''
 		(just after undo move, so p1 is @r,c and p2 @ rx,cx)
-		1) pretend p1 @ rx,cx, remove control
+		1) remove p2, pretend p1 @ rx,cx, remove control
 		2) remove control from all targeting r,c and rx,cx
 		3) add control back to r,c (p1 already there)
 		4) add control back to pcs
@@ -727,7 +707,7 @@ class Board:
 
 		def addMove(r: int, c: int, rx: int, cx: int) -> None:
 			# if (rx, cx) no t in mtx[r][c]:
-			mtx[r][c].append((rx, cx))
+			legal.append((r, c, rx, cx))
 
 		def inCheckAfter(r: int, c: int, rx: int, cx: int) -> bool:
 			# store relevant info before trying move
@@ -744,7 +724,7 @@ class Board:
 			self.generatePositionMatrix()
 			return check
 
-		mtx = [[[] for _ in range(8)] for _ in range(8)]
+		legal = []
 		for r in range(8):
 			for c in range(8):
 				if (cur := self.squares[r][c]) and (cur.team == team):
@@ -849,7 +829,7 @@ class Board:
 										addMove(r, 4, r, 2)
 						case _:
 							pass
-		self.legal_moves = mtx
+		self.legal_moves = legal
 
 	def printBoard(self) -> None:
 		print("    0  1  2  3  4  5  6  7")
@@ -903,8 +883,4 @@ class Board:
 
 	def printLegalMoves(self) -> None:
 		print("*********\nLEGAL MOVES:\n\n")
-		for r in range(8):
-			print(f"row {r}: ", end="")
-			for c in range(8):
-				print(self.legal_moves[r][c], end=" _ ")
-			print("\n")
+		print(self.legal_moves)

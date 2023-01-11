@@ -1,6 +1,7 @@
 class Engine:
 	def __init__(self):
-		self.positionScores = {
+		# from rustic chess
+		self.position_scores = {
 				"Pawn" : [  
 					0,  0,  0,  0,  0,  0,  0,  0,
 					50, 50, 50, 50, 50, 50, 50, 50,
@@ -73,15 +74,17 @@ class Engine:
 		return score
 
 	def positionEvaluate(self, board: object) -> int:
+		# based on position_scores, give each piece a positional score and add to overall score
 		score = 0
 		for r in range(8):
 			for c in range(8):
 				if cur := board.squares[r][c]:
-					score += self.positionScores[cur.__class__.__name__][((r * 8) + c) if cur.team else ((7 - r) * 8 + c)] * (cur.value if cur.team else -cur.value)
+					score += self.position_scores[cur.__class__.__name__][((r * 8) + c) if cur.team else ((7 - r) * 8 + c)] \
+						* (cur.value if cur.team else -cur.value)
 		return score
 	
 	def evaluate(self, board: object) -> int:
-		# todo: optimize/combine this cleanly so that it doesn't run through entire board on every eval
-		pos_score = 0.1 * self.positionEvaluate(board)
-		mat_score = 50 * self.materialEvaluate(board)
+		# NOTE: slightly inefficient to run through board separately, easier to read and understand weights
+		pos_score = 0.15 * self.positionEvaluate(board)
+		mat_score = 46 * self.materialEvaluate(board)
 		return pos_score + mat_score

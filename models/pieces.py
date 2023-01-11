@@ -28,5 +28,5 @@ class Queen:
 class King:
 	def __init__(self, team: bool):
 		self.team = team
-		self.value = 0  # priceless
+		self.value = 99  # priceless
 		self.moved = False  # for castling

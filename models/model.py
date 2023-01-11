@@ -23,4 +23,7 @@ class Model:
 		if move is a legal move on the board
 		'''
 		r, c, rx, cx = move
-		return (rx, cx) in self.board.legal_moves[r][c]
+		return (r, c, rx, cx) in self.board.legal_moves
+	
+	def updateMoveCount(self) -> None:
+		self.move_cnt += 1
