@@ -5,7 +5,7 @@ class Board:
 		self.initBoard()
 		# pos_mtx: binary/null matrix that contains info about what team each piece is on
 		# control_mtx: matrix that contains info about what pieces control what squares (both teams)
-		# legal_moves: matrix that contains all legal moves for cur pos (only cur team)
+		# legal_moves: list that contains all legal moves for cur pos (only cur team)
 	
 	def initBoard(self):
 		self.squares = [[None for _ in range(8)] for _ in range (8)]
