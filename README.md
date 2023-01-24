@@ -1,4 +1,4 @@
-# chess-new
+# chess
 
 Chess with Artificial Intelligence by Will Dufault and Mattheus Faria.
 
