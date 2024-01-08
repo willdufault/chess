@@ -1,6 +1,6 @@
-# chess
+# Chess with Artificial Intelligence
 
-Chess with Artificial Intelligence by Will Dufault and Mattheus Faria.
+(Created by Will Dufault and Mattheus Faria.)
 
 ## How to Play:
 - Black is on top (CAPS)
