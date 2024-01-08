@@ -14,7 +14,7 @@ Chess with Artificial Intelligence by Will Dufault and Mattheus Faria.
 - The game itself (model.py, board.py)
 	- Uses no external libraries, completely custom
 - The engine (engine.py)
-	- A very simple 0-depth engine that evaluates the current board based on
+	- A very simple engine that evaluates the current board based on
 		- Positional advantage: if pieces are on good squares (see position_scores in models/engine.py)
 		- Material advantage: simple calculation, sum of white piece values minus sum of black piece values
 		- Space-control adavantage: an evaluation based on how many spaces a piece "controls" multiplied by its piece value 
