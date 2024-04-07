@@ -76,7 +76,7 @@ def playHuman() -> None:
         prev_move = move
         r, c, rx, cx, = move
 
-        model.board.humanMove(r, c, rx, cx)
+        model.board.makeHumanMove(r, c, rx, cx)
         model.updateMoveCount()
         team = not team
 
@@ -115,7 +115,7 @@ def playBot() -> None:
         
         print("Bot thinking...")
 
-        prev_move = model.bot.bestMove(model.board, not team, model.move_count)
+        prev_move = model.bot.calculateBestMove(model.board, not team, model.move_count)
         model.updateMoveCount()
 
     while True:
@@ -150,7 +150,7 @@ def playBot() -> None:
         prev_move = move
         r, c, rx, cx, = move
 
-        model.board.humanMove(r, c, rx, cx)
+        model.board.makeHumanMove(r, c, rx, cx)
         
         # Bot's turn to make a move.
         team = not team
@@ -176,7 +176,7 @@ def playBot() -> None:
 
         print("Bot thinking...")
 
-        prev_move = model.bot.bestMove(model.board, team, model.move_count)
+        prev_move = model.bot.calculateBestMove(model.board, team, model.move_count)
         model.updateMoveCount()
         
         # Switch back to player's team.

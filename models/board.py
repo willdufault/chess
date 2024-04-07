@@ -86,7 +86,7 @@ class Board:
 			else:
 				self.black_king_pos = (r, c)
 
-	def humanMove(self, r: int, c: int, rx: int, cx: int) -> None:
+	def makeHumanMove(self, r: int, c: int, rx: int, cx: int) -> None:
 		'''
 		precondition: move is legal
 		'''
@@ -119,7 +119,7 @@ class Board:
 					pass
 			self.generateControlMatrix()
 
-	def botMove(self, r: int, c: int, rx: int, cx: int) -> None:
+	def makeBotMove(self, r: int, c: int, rx: int, cx: int) -> None:
 		p1, p2 = self.squares[r][c], self.squares[rx][cx]
 		# update board state
 		self.move(r, c, rx, cx)
