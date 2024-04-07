@@ -145,7 +145,7 @@ class Board:
 		r, c = self.white_king_pos if team else self.black_king_pos
 		return controls(r, c, not team)
 	
-	def stalemate(self, team: bool, move_cnt: int) -> bool:
+	def stalemate(self, team: bool, move_count: int) -> bool:
 		'''
 		if the given team is stalemated
 		'''
@@ -153,7 +153,7 @@ class Board:
 		def noLegalMoves() -> bool:
 			return not self.legal_moves
 
-		return (move_cnt == 200) or ((not self.check(team)) and noLegalMoves())
+		return (move_count == 200) or ((not self.check(team)) and noLegalMoves())
 	
 	def checkmate(self, team: bool) -> bool:
 		'''

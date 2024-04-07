@@ -7,7 +7,7 @@ class Bot:
 		self.engine = engine
 		self.memo = {}  # board memoization
 
-	def bestMove(self, board: object, team: bool, move_cnt: int) -> tuple[int]:
+	def bestMove(self, board: object, team: bool, move_count: int) -> tuple[int]:
 		'''
 		precondition: legal moves updated for cur pos
 		'''
@@ -23,7 +23,7 @@ class Bot:
 			p1_moved = p1.moved if hasattr(p1, "moved") else None
 			board.botMove(r, c, rx, cx)
 			# add move score
-			scores.append((self.minimax_ab_memo(team, self.depth, move_cnt + 1, -math.inf, math.inf, board), r, c, rx, cx))
+			scores.append((self.minimax_ab_memo(team, self.depth, move_count + 1, -math.inf, math.inf, board), r, c, rx, cx))
 			board.undo(r, c, rx, cx, p1, p2, p1_moved)
 			board.revertControlMatrix(r, c, rx, cx, p1, p2)
 			board.generatePositionMatrix()
@@ -33,7 +33,7 @@ class Bot:
 		board.botMove(best_r, best_c, best_rx, best_cx)
 		return (best_r, best_c, best_rx, best_cx)
 
-	def minimax_ab_memo(self, team: bool, depth: int, move_cnt: int, a: int, b: int, board: object) -> int:
+	def minimax_ab_memo(self, team: bool, depth: int, move_count: int, a: int, b: int, board: object) -> int:
 		'''
 		for every legal move, try it and its legal moves (depth times), find the move with the greatest outcome
 		* with alpha-beta pruning to eliminate unnecessary calls (to start, a (high) = -oo, b (low) = oo)
@@ -51,7 +51,7 @@ class Bot:
 			return tuple(key)
 	
 		board.generateLegalMoves(team)
-		if board.stalemate(team, move_cnt):
+		if board.stalemate(team, move_count):
 			return 0
 		if board.checkmate(team):
 			return (-300 if team else 300) * depth
@@ -73,7 +73,7 @@ class Bot:
 				scores.append(score := self.memo[key])
 			# new board
 			else:
-				scores.append(score := self.minimax_ab_memo(not team, depth - 1, move_cnt + 1, a, b, board))
+				scores.append(score := self.minimax_ab_memo(not team, depth - 1, move_count + 1, a, b, board))
 				# add to memo
 				self.memo[key] = score
 			# undo move, revert game state
